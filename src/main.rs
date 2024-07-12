@@ -3,7 +3,10 @@
 
 use core::cell::RefCell;
 
-use epd_waveshare::{epd2in13_v2::Epd2in13, prelude::WaveshareDisplay as _};
+use epd_waveshare::{
+    epd2in13_v2::{Display2in13 as EpdBuffer, Epd2in13 as EpdDisplay},
+    prelude::WaveshareDisplay as _,
+};
 use esp_backtrace as _;
 use esp_hal::{
     clock::ClockControl,
@@ -11,13 +14,14 @@ use esp_hal::{
     gpio::{self, Io},
     peripherals::Peripherals,
     prelude::*,
+    rtc_cntl::Rtc,
     spi::{master::Spi, SpiMode},
     system::SystemControl,
 };
 
-extern crate alloc;
+mod draw;
 
-static IMAGE_DATA: &[u8] = include_bytes!("../image.raw");
+extern crate alloc;
 
 #[entry]
 fn main() -> ! {
@@ -49,14 +53,19 @@ fn main() -> ! {
 
     let mut spi_bus = embedded_hal_bus::spi::RefCellDevice::new(&spi, cs, delay).unwrap();
 
-    let mut epd = Epd2in13::new(&mut spi_bus, busy, dc, rst, &mut delay, None)
+    let mut epd = EpdDisplay::new(&mut spi_bus, busy, dc, rst, &mut delay, None)
         .expect("EPaper should be present");
 
-    epd.update_and_display_frame(&mut spi_bus, IMAGE_DATA, &mut delay)
+    let mut display = EpdBuffer::default();
+
+    draw::clear_display(&mut display);
+    draw::text_to_display(&mut display, "Hello");
+
+    epd.update_and_display_frame(&mut spi_bus, display.buffer(), &mut delay)
         .expect("EPaper should accept update/display requests");
 
-    loop {
-        log::info!("...");
-        delay.delay(1.secs());
-    }
+    epd.sleep(&mut spi_bus, &mut delay)
+        .expect("EPaper should never fail to sleep");
+
+    Rtc::new(peripherals.LPWR, None).sleep_deep(&[], &mut delay)
 }

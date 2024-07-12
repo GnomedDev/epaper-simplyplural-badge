@@ -20,9 +20,11 @@ embedded-hal-bus = "0.2.0"
 
 epd-waveshare = { git = "https://github.com/caemor/epd-waveshare.git", default-features = false, features = [
     "epd2in13_v2",
+    "graphics",
 ] }
 
 log = { version = "0.4.21" }
+embedded-graphics = { version = "0.8.1", default-features = false }
 
 [profile.release]
 codegen-units = 1
