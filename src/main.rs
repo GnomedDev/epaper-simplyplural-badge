@@ -5,6 +5,7 @@ use core::cell::RefCell;
 
 use epd_waveshare::{
     epd2in13_v2::{Display2in13 as EpdBuffer, Epd2in13 as EpdDisplay},
+    graphics::DisplayRotation,
     prelude::WaveshareDisplay as _,
 };
 use esp_backtrace as _;
@@ -57,15 +58,13 @@ fn main() -> ! {
         .expect("EPaper should be present");
 
     let mut display = EpdBuffer::default();
+    display.set_rotation(DisplayRotation::Rotate90);
 
     draw::clear_display(&mut display);
     draw::text_to_display(&mut display, "Hello");
 
     epd.update_and_display_frame(&mut spi_bus, display.buffer(), &mut delay)
         .expect("EPaper should accept update/display requests");
-
-    epd.sleep(&mut spi_bus, &mut delay)
-        .expect("EPaper should never fail to sleep");
 
     Rtc::new(peripherals.LPWR, None).sleep_deep(&[], &mut delay)
 }
