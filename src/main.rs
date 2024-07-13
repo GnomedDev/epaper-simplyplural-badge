@@ -23,6 +23,7 @@ use esp_hal::{
 use rusttype::Font;
 
 mod draw;
+mod simplyplural;
 
 extern crate alloc;
 
@@ -62,13 +63,27 @@ fn main() -> ! {
     let mut display = EpdBuffer::default();
     display.set_rotation(DisplayRotation::Rotate90);
 
-    let font = Font::try_from_bytes(include_bytes!("../Comfortaa-Medium-Latin.ttf")).unwrap();
-
-    draw::clear_display(&mut display);
-    draw::text_to_display(&mut display, font, "Hello");
-
-    epd.update_and_display_frame(&mut spi_bus, display.buffer(), &mut delay)
-        .expect("EPaper should accept update/display requests");
+    main_loop(display, delay, |buf| {
+        epd.update_and_display_frame(&mut spi_bus, buf, &mut delay)
+            .expect("EPaper should accept update/display requests")
+    });
 
     Rtc::new(peripherals.LPWR, None).sleep_deep(&[], &mut delay)
+}
+
+#[allow(clippy::never_loop)]
+fn main_loop(mut display: EpdBuffer, _: Delay, mut update_screen: impl FnMut(&[u8])) {
+    let font = Font::try_from_bytes(include_bytes!("../Comfortaa-Medium-Latin.ttf")).unwrap();
+
+    loop {
+        let text = simplyplural::fetch_current_front_name();
+
+        draw::clear_display(&mut display);
+        draw::text_to_display(&mut display, font.clone(), text);
+
+        update_screen(display.buffer());
+
+        break;
+        // delay.delay(5.secs());
+    }
 }
