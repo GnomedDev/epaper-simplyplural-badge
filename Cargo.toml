@@ -25,8 +25,10 @@ epd-waveshare = { git = "https://github.com/caemor/epd-waveshare.git", default-f
 
 log = { version = "0.4.21" }
 embedded-graphics = { version = "0.8.1", default-features = false }
+embedded_font = { git = "https://github.com/GnomedDev/embedded-font" }
+rusttype = { version = "0.9.3", default-features = false }
 
 [profile.release]
 codegen-units = 1
-opt-level = 's'
+# opt-level = 's'
 lto = 'thin'

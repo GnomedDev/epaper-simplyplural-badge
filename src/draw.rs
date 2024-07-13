@@ -1,12 +1,7 @@
 use core::convert::Infallible;
 
-use embedded_graphics::{
-    draw_target::DrawTarget,
-    geometry::Point,
-    mono_font::{ascii::FONT_10X20, MonoTextStyle},
-    text::Text,
-    Drawable as _,
-};
+use embedded_font::FontTextStyleBuilder;
+use embedded_graphics::{draw_target::DrawTarget, geometry::Point, text::Text, Drawable as _};
 use epd_waveshare::color::Color;
 
 use crate::EpdBuffer;
@@ -22,8 +17,11 @@ pub fn clear_display(display: &mut EpdBuffer) {
     into_ok(display.clear(Color::White))
 }
 
-pub fn text_to_display(display: &mut EpdBuffer, text: &str) {
-    let style = MonoTextStyle::new(&FONT_10X20, Color::Black);
+pub fn text_to_display(display: &mut EpdBuffer, font: rusttype::Font<'static>, text: &str) {
+    let style = FontTextStyleBuilder::new(font)
+        .text_color(Color::Black)
+        .font_size(50)
+        .build();
 
-    into_ok(Text::new(text, Point::new(20, 30), style).draw(display));
+    into_ok(Text::new(text, Point::new(20, 40), style).draw(display));
 }

@@ -20,13 +20,15 @@ use esp_hal::{
     system::SystemControl,
 };
 
+use rusttype::Font;
+
 mod draw;
 
 extern crate alloc;
 
 #[entry]
 fn main() -> ! {
-    esp_alloc::heap_allocator!(32 * 1024);
+    esp_alloc::heap_allocator!(150 * 1024);
 
     let peripherals = Peripherals::take();
     let system = SystemControl::new(peripherals.SYSTEM);
@@ -60,8 +62,10 @@ fn main() -> ! {
     let mut display = EpdBuffer::default();
     display.set_rotation(DisplayRotation::Rotate90);
 
+    let font = Font::try_from_bytes(include_bytes!("../Comfortaa-Medium-Latin.ttf")).unwrap();
+
     draw::clear_display(&mut display);
-    draw::text_to_display(&mut display, "Hello");
+    draw::text_to_display(&mut display, font, "Hello");
 
     epd.update_and_display_frame(&mut spi_bus, display.buffer(), &mut delay)
         .expect("EPaper should accept update/display requests");
