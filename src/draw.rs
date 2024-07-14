@@ -14,7 +14,7 @@ fn into_ok<T>(res: Result<T, Infallible>) -> T {
 }
 
 pub fn clear_display(display: &mut EpdBuffer) {
-    into_ok(display.clear(Color::White))
+    into_ok(display.clear(Color::White));
 }
 
 pub fn text_to_display(display: &mut EpdBuffer, font: rusttype::Font<'static>, text: &str) {

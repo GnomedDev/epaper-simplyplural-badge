@@ -1,5 +1,6 @@
 #![no_std]
 #![no_main]
+#![warn(rust_2018_idioms, clippy::pedantic)]
 
 use core::cell::RefCell;
 
@@ -24,8 +25,6 @@ use rusttype::Font;
 
 mod draw;
 mod simplyplural;
-
-extern crate alloc;
 
 #[entry]
 fn main() -> ! {
@@ -65,7 +64,7 @@ fn main() -> ! {
 
     main_loop(display, delay, |buf| {
         epd.update_and_display_frame(&mut spi_bus, buf, &mut delay)
-            .expect("EPaper should accept update/display requests")
+            .expect("EPaper should accept update/display requests");
     });
 
     Rtc::new(peripherals.LPWR, None).sleep_deep(&[], &mut delay)
