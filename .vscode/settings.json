@@ -1,3 +1,7 @@
 {
     "rust-analyzer.check.allTargets": false,
+    "rust-analyzer.check.extraEnv": {
+        "SSID": "",
+        "PASSWORD": ""
+    }
 }

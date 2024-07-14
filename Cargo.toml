@@ -12,12 +12,18 @@ esp-backtrace = { version = "0.12.0", features = [
     "panic-handler",
     "println",
 ] }
+esp-wifi = { version = "0.6.0", features = [
+    "esp32",
+    "tcp",
+    "dhcpv4",
+    "wifi",
+    "log",
+], default-features = false }
 esp-hal = { version = "0.18.0", features = ["esp32", "embedded-hal"] }
 esp-println = { version = "0.9.1", features = ["esp32", "log"] }
 esp-alloc = { version = "0.4.0" }
 
 embedded-hal-bus = "0.2.0"
-
 epd-waveshare = { git = "https://github.com/caemor/epd-waveshare.git", default-features = false, features = [
     "epd2in13_v2",
     "graphics",
@@ -27,6 +33,10 @@ log = { version = "0.4.21" }
 embedded-graphics = { version = "0.8.1", default-features = false }
 embedded_font = { git = "https://github.com/GnomedDev/embedded-font" }
 rusttype = { version = "0.9.3", default-features = false }
+smoltcp = { version = "0.11.0", default-features = false, features = [
+    "proto-ipv4",
+    "socket-tcp",
+] }
 
 [profile.release]
 codegen-units = 1
