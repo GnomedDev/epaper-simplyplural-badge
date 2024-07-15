@@ -37,6 +37,8 @@ smoltcp = { version = "0.11.0", default-features = false, features = [
     "proto-ipv4",
     "socket-tcp",
 ] }
+embedded-io = { version = "0.6.1", default-features = false }
+heapless = { version = "0.8.0", default-features = false }
 
 [profile.release]
 codegen-units = 1

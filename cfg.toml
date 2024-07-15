@@ -1,0 +1,3 @@
+[esp-wifi]
+country_code = "GB"
+heap_size = 98767

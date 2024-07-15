@@ -327,6 +327,7 @@ version = "0.1.0"
 dependencies = [
  "embedded-graphics",
  "embedded-hal-bus",
+ "embedded-io",
  "embedded_font",
  "epd-waveshare",
  "esp-alloc",
@@ -334,6 +335,7 @@ dependencies = [
  "esp-hal",
  "esp-println",
  "esp-wifi",
+ "heapless",
  "log",
  "rusttype",
  "smoltcp",

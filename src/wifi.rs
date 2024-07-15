@@ -18,6 +18,9 @@ use smoltcp::iface::SocketStorage;
 
 const SSID: &str = env!("SSID");
 const PASSWORD: &str = env!("PASSWORD");
+pub const PROXY_IP: &str = env!("PROXY_IP");
+pub const PROXY_KEY: &str = env!("PROXY_KEY");
+pub const PROXY_PORT: &str = env!("PROXY_PORT");
 
 pub fn connect<'a>(
     clocks: &Clocks<'_>,

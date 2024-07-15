@@ -2,15 +2,9 @@
 #![no_main]
 #![warn(rust_2018_idioms, clippy::pedantic)]
 
-use core::cell::RefCell;
-
 use alloc::{boxed::Box, format};
-use draw::FontSize;
-use epd_waveshare::{
-    epd2in13_v2::{Display2in13 as EpdBuffer, Epd2in13 as EpdDisplay},
-    graphics::DisplayRotation,
-    prelude::WaveshareDisplay as _,
-};
+use core::{cell::RefCell, str::FromStr as _};
+
 use esp_backtrace as _;
 use esp_hal::{
     clock::ClockControl,
@@ -22,15 +16,27 @@ use esp_hal::{
     spi::{master::Spi, SpiMode},
     system::SystemControl,
 };
+use esp_wifi::{wifi::WifiStaDevice, wifi_interface::Socket};
+
+use embedded_io::Write as _;
+use epd_waveshare::{
+    epd2in13_v2::{Display2in13 as EpdBuffer, Epd2in13 as EpdDisplay},
+    graphics::DisplayRotation,
+    prelude::WaveshareDisplay as _,
+};
 
 use rusttype::Font;
 use smoltcp::iface::SocketStorage;
+
+use draw::FontSize;
 
 mod draw;
 mod simplyplural;
 mod wifi;
 
 extern crate alloc;
+
+type SocketError = <Socket<'static, 'static, WifiStaDevice> as embedded_io::ErrorType>::Error;
 
 /// Technically doesn't shutdown the chip, but sleeps with no wakeup sources.
 fn coma(lpwr: LPWR, delay: &mut Delay) -> ! {
@@ -39,7 +45,7 @@ fn coma(lpwr: LPWR, delay: &mut Delay) -> ! {
 
 #[entry]
 fn main() -> ! {
-    esp_alloc::heap_allocator!(135 * 1024);
+    esp_alloc::heap_allocator!(100 * 1000);
 
     let peripherals = Peripherals::take();
     let system = SystemControl::new(peripherals.SYSTEM);
@@ -48,6 +54,9 @@ fn main() -> ! {
     let mut delay = Delay::new(&clocks);
 
     esp_println::logger::init_logger(log::LevelFilter::Info);
+
+    let proxy_ip = wifi::PROXY_IP.parse().unwrap();
+    let proxy_port = wifi::PROXY_PORT.parse().unwrap();
 
     // Setup the EPD display, over the SPI bus.
     let io = Io::new(peripherals.GPIO, peripherals.IO_MUX);
@@ -75,10 +84,17 @@ fn main() -> ! {
     display.set_rotation(DisplayRotation::Rotate90);
 
     let font = Font::try_from_bytes(include_bytes!("../Comfortaa-Medium-Latin.ttf")).unwrap();
+    let mut display_error = |text: &str| {
+        log::info!("{text}");
+        draw::text_to_display(&mut display, font.clone(), FontSize::Small, text);
 
-    // Setup the WIFI connection and HTTPS client.
+        epd.update_and_display_frame(&mut spi_bus, display.buffer(), &mut delay)
+            .expect("EPaper should accept update/display requests");
+    };
+
+    // Setup the WIFI connection and socket client.
     let mut socket_storage = [SocketStorage::EMPTY; 3];
-    let _wifi_stack = match wifi::connect(
+    let wifi_stack = match wifi::connect(
         &clocks,
         peripherals.TIMG1,
         peripherals.RNG,
@@ -88,21 +104,24 @@ fn main() -> ! {
     ) {
         Ok(stack) => stack,
         Err(err) => {
-            draw::text_to_display(
-                &mut display,
-                font,
-                FontSize::Small,
-                &format!("Failed to connect to WIFI: {err:?}"),
-            );
-
-            epd.update_and_display_frame(&mut spi_bus, display.buffer(), &mut delay)
-                .expect("EPaper should accept update/display requests");
-
+            display_error(&format!("Failed to connect to wifi: {err:?}"));
             coma(peripherals.LPWR, &mut delay);
         }
     };
 
-    main_loop(display, delay, &font, |buf| {
+    let mut recv_buf = [0; 1024];
+    let mut send_buf = [0; 1024];
+    let mut socket = wifi_stack.get_socket(&mut recv_buf, &mut send_buf);
+
+    log::info!("Opening socket to SP proxy");
+    let open_res = socket.open(proxy_ip, proxy_port);
+    if let Err(err) = open_res.and_then(|()| socket.write_all(wifi::PROXY_KEY.as_bytes())) {
+        display_error(&format!("Failed to connect to proxy: {err:?}"));
+        coma(peripherals.LPWR, &mut delay);
+    }
+
+    log::info!("Starting main loop");
+    main_loop(&mut display, delay, &font, &mut socket, |buf| {
         epd.update_and_display_frame(&mut spi_bus, buf, &mut delay)
             .expect("EPaper should accept update/display requests");
     });
@@ -112,20 +131,32 @@ fn main() -> ! {
 
 #[allow(clippy::never_loop)]
 fn main_loop(
-    mut display: Box<EpdBuffer>,
-    _: Delay,
+    display: &mut EpdBuffer,
+    delay: Delay,
     font: &Font<'static>,
+    socket: &mut Socket<'_, '_, WifiStaDevice>,
     mut update_screen: impl FnMut(&[u8]),
 ) {
+    let mut prev_text = heapless::String::new();
     loop {
-        let text = simplyplural::fetch_current_front_name();
+        let text = match simplyplural::fetch_current_front_name(socket) {
+            Ok(text) => text,
+            Err(err) => {
+                let mut string = format!("Err: {err:?}");
+                string.truncate(32);
 
-        draw::clear_display(&mut display);
-        draw::text_to_display(&mut display, font.clone(), FontSize::Large, text);
+                heapless::String::from_str(&string).unwrap()
+            }
+        };
 
-        update_screen(display.buffer());
+        if text != prev_text {
+            draw::clear_display(display);
+            draw::text_to_display(display, font.clone(), FontSize::Large, &text);
 
-        break;
-        // delay.delay(5.secs());
+            update_screen(display.buffer());
+            prev_text = text;
+        }
+
+        delay.delay(10.secs());
     }
 }

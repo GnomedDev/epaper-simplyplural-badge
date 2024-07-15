@@ -7,7 +7,8 @@ A WIP project to display [SimplyPlural] front status on a [Waveshare e-Paper Clo
 - [x] Hello World
 - [x] Show hard-coded image on epaper
 - [x] Text -> Image on device
-- [ ] Fetch text from SimplyPlural API
+- [x] Fetch text from SimplyPlural API
+- [ ] Do HTTPS and JSON on device, instead of relying on proxy
 
 ## Licensing
 
