@@ -28,8 +28,6 @@ use epd_waveshare::{
 use rusttype::Font;
 use smoltcp::iface::SocketStorage;
 
-use draw::FontSize;
-
 mod draw;
 mod simplyplural;
 mod wifi;
@@ -86,7 +84,7 @@ fn main() -> ! {
     let font = Font::try_from_bytes(include_bytes!("../Comfortaa-Medium-Latin.ttf")).unwrap();
     let mut display_error = |text: &str| {
         log::info!("{text}");
-        draw::text_to_display(&mut display, font.clone(), FontSize::Small, text);
+        draw::text_to_display(&mut display, font.clone(), text);
 
         epd.update_and_display_frame(&mut spi_bus, display.buffer(), &mut delay)
             .expect("EPaper should accept update/display requests");
@@ -151,7 +149,7 @@ fn main_loop(
 
         if text != prev_text {
             draw::clear_display(display);
-            draw::text_to_display(display, font.clone(), FontSize::Large, &text);
+            draw::text_to_display(display, font.clone(), text.trim_end());
 
             update_screen(display.buffer());
             prev_text = text;
