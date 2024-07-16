@@ -25,21 +25,17 @@ esp-hal-embassy = { version = "0.2.0", default-features = false, features = [
     "esp32",
     "executors",
 ] }
-esp-mbedtls = { git = "https://github.com/esp-rs/esp-mbedtls", default-features = false, features = [
+esp-mbedtls = { git = "https://github.com/GnomedDev/esp-mbedtls", branch = "update/esp-hal-0.19", default-features = false, features = [
     "async",
     "esp32",
 ] }
 
-embedded-hal-bus = "0.2.0"
-epd-waveshare = { git = "https://github.com/caemor/epd-waveshare.git", default-features = false, features = [
-    "epd2in13_v2",
-    "graphics",
-] }
+static_cell = "2.1.0"
 log = { version = "0.4.21" }
-embedded-graphics = { version = "0.8.1", default-features = false }
-embedded_font = { git = "https://github.com/GnomedDev/embedded-font" }
-rusttype = { version = "0.9.3", default-features = false }
-heapless = { version = "0.8.0", default-features = false, features = ["serde"] }
+embassy-time = { version = "0.3.1", default-features = false }
+reqwless = { git = "https://github.com/GnomedDev/reqwless", branch = "update/esp-hal-0.19", default-features = false, features = [
+    "esp-mbedtls",
+] }
 embassy-executor = { version = "0.5.0", features = [
     "integrated-timers",
     "nightly",
@@ -51,27 +47,9 @@ embassy-net = { version = "0.4.0", default-features = false, features = [
     "log",
     "proto-ipv4",
 ] }
-embassy-time = { version = "0.3.1", default-features = false }
-static_cell = "2.1.0"
-reqwless = { path = "../rust-libs/reqwless", default-features = false, features = [
-    "esp-mbedtls",
-] }
-aformat = "0.1.3"
-serde = { version = "1.0.204", features = ["derive"], default-features = false }
-serde_json = { version = "1.0.120", features = [
-    "alloc",
-], default-features = false }
 
 [profile.release]
 codegen-units = 1
 # opt-level = 's'
 debug = "full"
 lto = 'thin'
-
-
-[patch.crates-io.esp-hal]
-path = "../rust-libs/esp-hal/esp-hal"
-
-[patch."https://github.com/esp-rs/esp-mbedtls".esp-mbedtls]
-git = "https://github.com/GnomedDev/esp-mbedtls"
-branch = "update/esp-hal-0.19"

@@ -1,8 +1,6 @@
-use aformat::{aformat, CapStr};
 use embassy_net::{tcp::client::TcpClientState, Stack};
 use esp_hal::peripherals::RSA;
-use heapless::String;
-use reqwless::request::{Method, RequestBuilder as _};
+use reqwless::request::Method;
 
 use crate::make_static;
 
@@ -13,13 +11,7 @@ type TcpClient = embassy_net::tcp::client::TcpClient<'static, WifiDriver, 1, 409
 
 pub type HttpClient = reqwless::client::HttpClient<'static, TcpClient, DnsSocket>;
 
-static CERT: &[u8; 3163] = concat_bytes!(include_bytes!("../apparyllis-com-chain.pem"), b'\0');
-
-#[derive(serde::Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct SPResponse {
-    front_string: String<32>,
-}
+static CERT: &[u8] = &*concat_bytes!(include_bytes!("../www-google-com-chain.pem"), b'\0');
 
 pub fn init_http_client(wifi_stack: &'static Stack<WifiDriver>, rsa: RSA) -> HttpClient {
     let state = make_static!(TcpClientState<1, 4096, 4096>, TcpClientState::new());
@@ -39,18 +31,10 @@ pub fn init_http_client(wifi_stack: &'static Stack<WifiDriver>, rsa: RSA) -> Htt
 }
 
 #[allow(clippy::large_futures)]
-pub async fn fetch_current_front_name(
-    http: &mut HttpClient,
-) -> Result<String<32>, reqwless::Error> {
-    let url = aformat!(
-        "https://api.apparyllis.com/v1/friend/{}/getFrontValue",
-        CapStr::<32>(env!("SP_ID"))
-    );
-
-    let headers = [("Authorization", env!("SP_KEY"))];
-
+pub async fn perform_request(http: &mut HttpClient) -> Result<(), reqwless::Error> {
+    let url = "https://google.com";
     log::info!("Connecting to {url}");
-    let mut request = http.request(Method::GET, &url).await?.headers(&headers);
+    let mut request = http.request(Method::GET, url).await?;
 
     log::info!("Sending request");
     let mut rx_buf = [0; 1024];
@@ -59,7 +43,6 @@ pub async fn fetch_current_front_name(
     log::info!("Reading body");
     let body = resp.body().read_to_end().await?;
 
-    log::info!("Parsing response");
-    let resp_json: SPResponse = serde_json::from_slice(body).unwrap();
-    Ok(resp_json.front_string)
+    log::info!("{}", core::str::from_utf8(body).unwrap());
+    Ok(())
 }
