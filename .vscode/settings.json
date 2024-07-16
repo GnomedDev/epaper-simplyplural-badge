@@ -2,9 +2,8 @@
     "rust-analyzer.check.allTargets": false,
     "rust-analyzer.check.extraEnv": {
         "SSID": "",
+        "SP_ID": "",
+        "SP_KEY": "",
         "PASSWORD": "",
-        "PROXY_IP": "",
-        "PROXY_KEY": "",
-        "PROXY_PORT": "",
     }
 }

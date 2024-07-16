@@ -1,32 +1,36 @@
 #![no_std]
 #![no_main]
 #![warn(rust_2018_idioms, clippy::pedantic)]
+#![feature(type_alias_impl_trait, concat_bytes)]
 
-use alloc::{boxed::Box, format};
+use alloc::format;
 use core::{cell::RefCell, str::FromStr as _};
+use embassy_net::{
+    dns::DnsSocket,
+    tcp::client::{TcpClient, TcpClientState},
+};
+use embassy_time::Timer;
+use embedded_hal_bus::spi::RefCellDevice;
+use simplyplural::HttpClient;
 
+use embassy_executor::Spawner;
+use epd_waveshare::{
+    epd2in13_v2::Display2in13 as EpdBuffer, graphics::DisplayRotation,
+    prelude::WaveshareDisplay as _,
+};
 use esp_backtrace as _;
 use esp_hal::{
     clock::ClockControl,
     delay::Delay,
-    gpio::{self, Io},
-    peripherals::{Peripherals, LPWR},
+    gpio::{self},
+    peripherals::{Peripherals, LPWR, SPI2},
     prelude::*,
     rtc_cntl::Rtc,
-    spi::{master::Spi, SpiMode},
+    spi::{FullDuplexMode, SpiMode},
     system::SystemControl,
+    timer::{timg::TimerGroup, ErasedTimer, OneShotTimer},
 };
-use esp_wifi::{wifi::WifiStaDevice, wifi_interface::Socket};
-
-use embedded_io::Write as _;
-use epd_waveshare::{
-    epd2in13_v2::{Display2in13 as EpdBuffer, Epd2in13 as EpdDisplay},
-    graphics::DisplayRotation,
-    prelude::WaveshareDisplay as _,
-};
-
 use rusttype::Font;
-use smoltcp::iface::SocketStorage;
 
 mod draw;
 mod simplyplural;
@@ -34,16 +38,34 @@ mod wifi;
 
 extern crate alloc;
 
-type SocketError = <Socket<'static, 'static, WifiStaDevice> as embedded_io::ErrorType>::Error;
-
-/// Technically doesn't shutdown the chip, but sleeps with no wakeup sources.
-fn coma(lpwr: LPWR, delay: &mut Delay) -> ! {
-    Rtc::new(lpwr, None).sleep_deep(&[], delay)
+#[macro_export]
+macro_rules! make_static {
+    ($t:ty, $val:expr) => ($crate::make_static!($t, $val,));
+    ($t:ty, $val:expr, $(#[$m:meta])*) => {{
+        $(#[$m])*
+        static STATIC_CELL: static_cell::StaticCell<$t> = static_cell::StaticCell::new();
+        STATIC_CELL.init_with(|| $val)
+    }};
 }
 
-#[entry]
-fn main() -> ! {
-    esp_alloc::heap_allocator!(100 * 1000);
+/// Technically doesn't shutdown the chip, but sleeps with no wakeup sources.
+fn coma(lpwr: LPWR) -> ! {
+    Rtc::new(lpwr, None).sleep_deep(&[])
+}
+
+type Spi = esp_hal::spi::master::Spi<'static, SPI2, FullDuplexMode>;
+type SpiBus = RefCellDevice<'static, Spi, gpio::Output<'static, gpio::Gpio15>, Delay>;
+type EpdDisplay = epd_waveshare::epd2in13_v2::Epd2in13<
+    SpiBus,
+    gpio::Input<'static, gpio::Gpio25>,
+    gpio::Output<'static, gpio::Gpio27>,
+    gpio::Output<'static, gpio::Gpio26>,
+    Delay,
+>;
+
+#[main]
+async fn main(spawner: Spawner) {
+    esp_alloc::heap_allocator!(50 * 1000);
 
     let peripherals = Peripherals::take();
     let system = SystemControl::new(peripherals.SYSTEM);
@@ -53,93 +75,94 @@ fn main() -> ! {
 
     esp_println::logger::init_logger(log::LevelFilter::Info);
 
-    let proxy_ip = wifi::PROXY_IP.parse().unwrap();
-    let proxy_port = wifi::PROXY_PORT.parse().unwrap();
+    let timer_group0 = TimerGroup::new(peripherals.TIMG0, &clocks, None);
+    esp_hal_embassy::init(
+        &clocks,
+        make_static!(
+            [OneShotTimer<ErasedTimer>; 1],
+            [OneShotTimer::new(timer_group0.timer0.into())]
+        ),
+    );
 
     // Setup the EPD display, over the SPI bus.
-    let io = Io::new(peripherals.GPIO, peripherals.IO_MUX);
+    let io = gpio::Io::new(peripherals.GPIO, peripherals.IO_MUX);
 
     let cs = gpio::Output::new(io.pins.gpio15, gpio::Level::High);
     let busy = gpio::Input::new(io.pins.gpio25, gpio::Pull::None);
     let rst = gpio::Output::new(io.pins.gpio26, gpio::Level::High);
     let dc = gpio::Output::new(io.pins.gpio27, gpio::Level::Low);
 
-    let spi = RefCell::new(
-        Spi::new(peripherals.SPI2, 8.MHz(), SpiMode::Mode0, &clocks).with_pins(
-            Some(io.pins.gpio13), // sclk
-            Some(io.pins.gpio14), // mosi
-            gpio::NO_PIN,
-            gpio::NO_PIN,
-        ),
+    let spi = make_static!(
+        RefCell<Spi>,
+        RefCell::new(
+            Spi::new(peripherals.SPI2, 8.MHz(), SpiMode::Mode0, &clocks).with_pins(
+                Some(io.pins.gpio13), // sclk
+                Some(io.pins.gpio14), // mosi
+                gpio::NO_PIN,
+                gpio::NO_PIN,
+            ),
+        )
     );
 
-    let mut spi_bus = embedded_hal_bus::spi::RefCellDevice::new(&spi, cs, delay).unwrap();
+    let mut spi_bus = RefCellDevice::new(&*spi, cs, delay).unwrap();
 
     let mut epd = EpdDisplay::new(&mut spi_bus, busy, dc, rst, &mut delay, None)
         .expect("EPaper should be present");
 
-    let mut display = Box::new(EpdBuffer::default());
+    let display = make_static!(EpdBuffer, EpdBuffer::default());
     display.set_rotation(DisplayRotation::Rotate90);
 
     let font = Font::try_from_bytes(include_bytes!("../Comfortaa-Medium-Latin.ttf")).unwrap();
     let mut display_error = |text: &str| {
         log::info!("{text}");
-        draw::text_to_display(&mut display, font.clone(), text);
+        draw::text_to_display(display, font.clone(), text);
 
         epd.update_and_display_frame(&mut spi_bus, display.buffer(), &mut delay)
             .expect("EPaper should accept update/display requests");
     };
 
-    // Setup the WIFI connection and socket client.
-    let mut socket_storage = [SocketStorage::EMPTY; 3];
+    // Setup the WIFI connection.
     let wifi_stack = match wifi::connect(
+        &spawner,
         &clocks,
         peripherals.TIMG1,
         peripherals.RNG,
         peripherals.RADIO_CLK,
         peripherals.WIFI,
-        &mut socket_storage,
-    ) {
+    )
+    .await
+    {
         Ok(stack) => stack,
         Err(err) => {
             display_error(&format!("Failed to connect to wifi: {err:?}"));
-            coma(peripherals.LPWR, &mut delay);
+            coma(peripherals.LPWR);
         }
     };
 
-    let mut recv_buf = [0; 1024];
-    let mut send_buf = [0; 1024];
-    let mut socket = wifi_stack.get_socket(&mut recv_buf, &mut send_buf);
+    // Setup HTTPS client
+    let state = make_static!(TcpClientState<1, 8192, 8192>, TcpClientState::new());
+    let tcp_client = TcpClient::new(wifi_stack, &*state);
+    let dns_socket = DnsSocket::new(wifi_stack);
 
-    log::info!("Opening socket to SP proxy");
-    let open_res = socket.open(proxy_ip, proxy_port);
-    if let Err(err) = open_res.and_then(|()| socket.write_all(wifi::PROXY_KEY.as_bytes())) {
-        display_error(&format!("Failed to connect to proxy: {err:?}"));
-        coma(peripherals.LPWR, &mut delay);
-    }
+    let config = reqwless::client::TlsConfig::new(
+        const_random::const_random!(u64),
+        make_static!([u8; 8192], [0; 8192]),
+        make_static!([u8; 8192], [0; 8192]),
+        reqwless::client::TlsVerify::None,
+    );
 
-    log::info!("Starting main loop");
-    main_loop(&mut display, delay, &font, &mut socket, |buf| {
-        epd.update_and_display_frame(&mut spi_bus, buf, &mut delay)
-            .expect("EPaper should accept update/display requests");
-    });
+    let mut client = HttpClient::new_with_tls(&tcp_client, &dns_socket, config);
 
-    coma(peripherals.LPWR, &mut delay);
-}
-
-#[allow(clippy::never_loop)]
-fn main_loop(
-    display: &mut EpdBuffer,
-    delay: Delay,
-    font: &Font<'static>,
-    socket: &mut Socket<'_, '_, WifiStaDevice>,
-    mut update_screen: impl FnMut(&[u8]),
-) {
+    // Start main loop
     let mut prev_text = heapless::String::new();
+    let rx_buffer = make_static!([u8; 4096], [0; 4096]);
     loop {
-        let text = match simplyplural::fetch_current_front_name(socket) {
+        log::info!("Refreshing front status");
+        let text = match simplyplural::fetch_current_front_name(&mut client, rx_buffer).await {
             Ok(text) => text,
             Err(err) => {
+                log::info!("{err:?}");
+
                 let mut string = format!("Err: {err:?}");
                 string.truncate(32);
 
@@ -147,14 +170,18 @@ fn main_loop(
             }
         };
 
-        if text != prev_text {
+        if text == prev_text {
+            log::info!("Front status has not changed");
+        } else {
             draw::clear_display(display);
             draw::text_to_display(display, font.clone(), text.trim_end());
 
-            update_screen(display.buffer());
+            epd.update_and_display_frame(&mut spi_bus, display.buffer(), &mut delay)
+                .expect("EPaper should accept update/display requests");
+
             prev_text = text;
         }
 
-        delay.delay(10.secs());
+        Timer::after_secs(60).await;
     }
 }

@@ -1,21 +1,35 @@
-use embedded_io::{Read, Write};
-use heapless::{String, Vec};
+use aformat::{aformat, CapStr};
+use heapless::String;
+use reqwless::request::{Method, RequestBuilder as _};
 
-use esp_wifi::{wifi::WifiStaDevice, wifi_interface::Socket};
+type WifiDriver = esp_wifi::wifi::WifiDevice<'static, esp_wifi::wifi::WifiStaDevice>;
 
-use crate::SocketError;
+type DnsSocket<'a> = embassy_net::dns::DnsSocket<'a, WifiDriver>;
+type TcpClient<'a> = embassy_net::tcp::client::TcpClient<'a, WifiDriver, 1, 8192, 8192>;
 
-pub fn fetch_current_front_name(
-    socket: &mut Socket<'_, '_, WifiStaDevice>,
-) -> Result<String<32>, SocketError> {
-    socket.write(b" ")?;
-    socket.flush()?;
+pub type HttpClient<'a> = reqwless::client::HttpClient<'a, TcpClient<'a>, DnsSocket<'a>>;
 
-    let mut buf = [0; 32];
-    socket.read_exact(&mut buf).map_err(|err| match err {
-        embedded_io::ReadExactError::UnexpectedEof => SocketError::SocketClosed,
-        embedded_io::ReadExactError::Other(other) => other,
-    })?;
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SPResponse {
+    front_string: String<32>,
+}
 
-    Ok(String::from_utf8(Vec::from_slice(&buf).unwrap()).unwrap())
+pub async fn fetch_current_front_name(
+    http: &mut HttpClient<'_>,
+    rx_buffer: &mut [u8],
+) -> Result<String<32>, reqwless::Error> {
+    let url = aformat!(
+        "https://api.apparyllis.com/v1/friend/{}/getFrontValue",
+        CapStr::<32>(env!("SP_ID"))
+    );
+
+    let headers = [("Authorization", env!("SP_KEY"))];
+    let mut request = http.request(Method::GET, &url).await?.headers(&headers);
+
+    let resp = request.send(rx_buffer).await?;
+    let body = resp.body().read_to_end().await?;
+
+    let resp_json: SPResponse = serde_json::from_slice(body).unwrap();
+    Ok(resp_json.front_string)
 }
