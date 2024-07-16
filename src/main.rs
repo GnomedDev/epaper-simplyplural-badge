@@ -20,7 +20,7 @@ use epd_waveshare::{
 };
 use esp_backtrace as _;
 use esp_hal::{
-    clock::ClockControl,
+    clock::{ClockControl, CpuClock},
     delay::Delay,
     gpio::{self},
     peripherals::{Peripherals, LPWR, SPI2},
@@ -70,7 +70,7 @@ async fn main(spawner: Spawner) {
     let peripherals = Peripherals::take();
     let system = SystemControl::new(peripherals.SYSTEM);
 
-    let clocks = ClockControl::max(system.clock_control).freeze();
+    let clocks = ClockControl::configure(system.clock_control, CpuClock::Clock80MHz).freeze();
     let mut delay = Delay::new(&clocks);
 
     esp_println::logger::init_logger(log::LevelFilter::Info);
