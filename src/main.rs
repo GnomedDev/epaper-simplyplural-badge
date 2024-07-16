@@ -3,20 +3,18 @@
 #![warn(rust_2018_idioms)]
 #![feature(type_alias_impl_trait, concat_bytes)]
 
+use core::hint::black_box;
+
 use embassy_executor::Spawner;
-use embassy_net::tcp::client::TcpClientState;
 use esp_backtrace as _;
 use esp_hal::{
     clock::ClockControl,
-    peripherals::{Peripherals, LPWR, RSA},
+    peripherals::Peripherals,
     prelude::*,
-    rtc_cntl::Rtc,
     system::SystemControl,
     timer::{timg::TimerGroup, ErasedTimer, OneShotTimer},
 };
-use net::{DnsSocket, HttpClient, TcpClient, CERT};
 
-mod net;
 mod wifi;
 
 #[macro_export]
@@ -27,11 +25,6 @@ macro_rules! make_static {
         static STATIC_CELL: static_cell::StaticCell<$t> = static_cell::StaticCell::new();
         STATIC_CELL.init_with(|| $val)
     }};
-}
-
-/// Technically doesn't shutdown the chip, but sleeps with no wakeup sources.
-fn coma(lpwr: LPWR) -> ! {
-    Rtc::new(lpwr, None).sleep_deep(&[])
 }
 
 #[main]
@@ -68,25 +61,9 @@ async fn main(spawner: Spawner) {
         Ok(stack) => stack,
         Err(err) => {
             log::info!("Failed to connect to wifi: {err:?}");
-            coma(peripherals.LPWR);
+            return;
         }
     };
 
-    // Setup HTTPS client
-
-    let state = make_static!(TcpClientState<1, 4096, 4096>, TcpClientState::new());
-    let tcp_client = make_static!(TcpClient, TcpClient::new(wifi_stack, &*state));
-    let dns_socket = make_static!(DnsSocket, DnsSocket::new(wifi_stack));
-
-    let config = reqwless::client::TlsConfig::new(
-        reqwless::TlsVersion::Tls1_3,
-        reqwless::Certificates {
-            ca_chain: Some(reqwless::X509::pem(CERT).unwrap()),
-            ..Default::default()
-        },
-        Some(make_static!(RSA, peripherals.RSA)), // Will use hardware acceleration
-    );
-
-    let mut client = HttpClient::new_with_tls(&*tcp_client, &*dns_socket, config);
-    net::perform_request(&mut client).await.unwrap();
+    black_box(([0_u64; 16000], wifi_stack));
 }

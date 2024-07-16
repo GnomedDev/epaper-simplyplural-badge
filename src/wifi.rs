@@ -78,7 +78,7 @@ async fn connection(mut controller: WifiController<'static>) {
     log::info!("[ConnTask] Started");
     loop {
         if let WifiState::StaConnected = esp_wifi::wifi::get_wifi_state() {
-            log::info!("[ConnTask] Connected to WIFI!");
+            log::info!("[ConnTask] Connected to wifi");
 
             controller.wait_for_event(WifiEvent::StaDisconnected).await;
             Timer::after(Duration::from_millis(5000)).await;

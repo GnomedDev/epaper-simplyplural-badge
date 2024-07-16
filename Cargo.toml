@@ -33,20 +33,17 @@ esp-mbedtls = { git = "https://github.com/GnomedDev/esp-mbedtls", branch = "upda
 static_cell = "2.1.0"
 log = { version = "0.4.21" }
 embassy-time = { version = "0.3.1", default-features = false }
-reqwless = { git = "https://github.com/GnomedDev/reqwless", branch = "update/esp-hal-0.19", default-features = false, features = [
-    "esp-mbedtls",
-] }
 embassy-executor = { version = "0.5.0", features = [
     "integrated-timers",
     "nightly",
 ], default-features = false }
 embassy-net = { version = "0.4.0", default-features = false, features = [
     "dhcpv4",
-    "dns",
     "tcp",
     "log",
     "proto-ipv4",
 ] }
+embedded-nal-async = { version = "0.7.1", default-features = false }
 
 [profile.release]
 codegen-units = 1
