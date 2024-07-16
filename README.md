@@ -9,6 +9,7 @@ A WIP project to display [SimplyPlural] front status on a [Waveshare e-Paper Clo
 - [x] Text -> Image on device
 - [x] Fetch text from SimplyPlural API
 - [x] Do HTTPS and JSON on device, instead of relying on proxy
+- [ ] Add more information to screen, instead of just name
 
 ## Licensing
 
