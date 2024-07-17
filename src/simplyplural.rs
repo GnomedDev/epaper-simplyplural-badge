@@ -1,3 +1,5 @@
+use core::str::FromStr;
+
 use aformat::{aformat, CapStr};
 use heapless::String;
 use reqwless::request::{Method, RequestBuilder as _};
@@ -13,6 +15,7 @@ pub type HttpClient<'a> = reqwless::client::HttpClient<'a, TcpClient<'a>, DnsSoc
 #[serde(rename_all = "camelCase")]
 struct SPResponse {
     front_string: String<32>,
+    custom_front_string: String<32>,
 }
 
 pub async fn fetch_current_front_name(
@@ -31,5 +34,14 @@ pub async fn fetch_current_front_name(
     let body = resp.body().read_to_end().await?;
 
     let resp_json: SPResponse = serde_json::from_slice(body).unwrap();
-    Ok(resp_json.front_string)
+    let front_status = match (
+        resp_json.front_string.is_empty(),
+        resp_json.custom_front_string.is_empty(),
+    ) {
+        (true, true) => String::from_str("Front is Empty").unwrap(),
+        (true, false) => resp_json.custom_front_string,
+        (false, _) => resp_json.front_string,
+    };
+
+    Ok(front_status)
 }
