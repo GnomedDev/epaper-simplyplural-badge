@@ -61,6 +61,7 @@ serde_json = { version = "1.0.120", features = [
     "alloc",
 ], default-features = false }
 const-random = "0.1.18"
+serde_cow = "0.1.2"
 
 [profile.release]
 codegen-units = 1
