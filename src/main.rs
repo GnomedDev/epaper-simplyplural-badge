@@ -23,7 +23,7 @@ use esp_hal::{
     clock::{ClockControl, CpuClock},
     delay::Delay,
     gpio::{self},
-    peripherals::{Peripherals, LPWR, RSA, SPI2},
+    peripherals::{Peripherals, LPWR, SPI2},
     prelude::*,
     rtc_cntl::Rtc,
     spi::{FullDuplexMode, SpiMode},
@@ -144,18 +144,11 @@ async fn main(spawner: Spawner) {
     let tcp_client = TcpClient::new(wifi_stack, &*state);
     let dns_socket = DnsSocket::new(wifi_stack);
 
-    let sp_cert = concat_bytes!(include_bytes!("../apparyllis-com-chain.pem"), b"\0");
     let config = reqwless::client::TlsConfig::new(
-        reqwless::TlsVersion::Tls1_3,
-        reqwless::Certificates {
-            ca_chain: Some(reqwless::X509::pem(sp_cert).unwrap()),
-            certificate: None,
-            private_key: None,
-            password: None,
-        },
-        Some(make_static!(RSA, peripherals.RSA)),
-        make_static!([u8; 4096], [0; 4096]),
-        make_static!([u8; 4096], [0; 4096]),
+        const_random::const_random!(u64),
+        make_static!([u8; 8192], [0; 8192]),
+        make_static!([u8; 8192], [0; 8192]),
+        reqwless::client::TlsVerify::None,
     );
 
     let mut client = HttpClient::new_with_tls(&tcp_client, &dns_socket, config);
