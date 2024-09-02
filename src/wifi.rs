@@ -6,7 +6,6 @@ use esp_hal::{
     clock::Clocks,
     peripherals::{RADIO_CLK, RNG, TIMG1, WIFI},
     rng::Rng,
-    timer::PeriodicTimer,
 };
 use esp_wifi::{
     initialize,
@@ -30,12 +29,12 @@ pub async fn connect(
     radio_clk: RADIO_CLK,
     wifi: WIFI,
 ) -> Result<&'static Stack<WifiDevice<'static, WifiStaDevice>>, WifiError> {
-    let timer = esp_hal::timer::timg::TimerGroup::new(timg1, clocks, None).timer0;
+    let timer_group1 = esp_hal::timer::timg::TimerGroup::new(timg1, clocks);
 
     log::info!("Initialising WIFI");
     let init = initialize(
         EspWifiInitFor::Wifi,
-        PeriodicTimer::new(timer.into()),
+        timer_group1.timer0,
         Rng::new(rng),
         radio_clk,
         clocks,

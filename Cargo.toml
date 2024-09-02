@@ -6,22 +6,22 @@ edition = "2021"
 license = "MIT"
 
 [dependencies]
-esp-backtrace = { version = "0.13.0", features = [
+esp-backtrace = { version = "0.14.0", features = [
     "esp32",
     "exception-handler",
     "panic-handler",
     "println",
 ] }
-esp-wifi = { version = "0.7.0", features = [
+esp-wifi = { version = "0.8.0", features = [
     "esp32",
     "embassy-net",
     "wifi",
     "log",
 ], default-features = false }
-esp-hal = { version = "0.19.0", features = ["esp32", "embedded-hal"] }
-esp-println = { version = "0.10.0", features = ["esp32", "log"] }
+esp-hal = { version = "0.20.1", features = ["esp32", "embedded-hal"] }
+esp-println = { version = "0.11.0", features = ["esp32", "log"] }
 esp-alloc = { version = "0.4.0" }
-esp-hal-embassy = { version = "0.2.0", default-features = false, features = [
+esp-hal-embassy = { version = "0.3.0", default-features = false, features = [
     "esp32",
     "executors",
 ] }
@@ -36,7 +36,7 @@ embedded-graphics = { version = "0.8.1", default-features = false }
 embedded_font = { git = "https://github.com/GnomedDev/embedded-font" }
 rusttype = { version = "0.9.3", default-features = false }
 heapless = { version = "0.8.0", default-features = false, features = ["serde"] }
-embassy-executor = { version = "0.5.0", features = [
+embassy-executor = { version = "0.6.0", features = [
     "integrated-timers",
     "nightly",
 ], default-features = false }

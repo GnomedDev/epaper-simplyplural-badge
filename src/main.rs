@@ -1,7 +1,7 @@
 #![no_std]
 #![no_main]
 #![warn(rust_2018_idioms, clippy::pedantic)]
-#![feature(type_alias_impl_trait, concat_bytes)]
+#![feature(type_alias_impl_trait, impl_trait_in_assoc_type, concat_bytes)]
 
 use alloc::format;
 use core::{cell::RefCell, str::FromStr as _};
@@ -28,7 +28,7 @@ use esp_hal::{
     rtc_cntl::Rtc,
     spi::{FullDuplexMode, SpiMode},
     system::SystemControl,
-    timer::{timg::TimerGroup, ErasedTimer, OneShotTimer},
+    timer::timg::TimerGroup,
 };
 use rusttype::Font;
 
@@ -50,7 +50,7 @@ macro_rules! make_static {
 
 /// Technically doesn't shutdown the chip, but sleeps with no wakeup sources.
 fn coma(lpwr: LPWR) -> ! {
-    Rtc::new(lpwr, None).sleep_deep(&[])
+    Rtc::new(lpwr).sleep_deep(&[])
 }
 
 type Spi = esp_hal::spi::master::Spi<'static, SPI2, FullDuplexMode>;
@@ -75,14 +75,8 @@ async fn main(spawner: Spawner) {
 
     esp_println::logger::init_logger(log::LevelFilter::Info);
 
-    let timer_group0 = TimerGroup::new(peripherals.TIMG0, &clocks, None);
-    esp_hal_embassy::init(
-        &clocks,
-        make_static!(
-            [OneShotTimer<ErasedTimer>; 1],
-            [OneShotTimer::new(timer_group0.timer0.into())]
-        ),
-    );
+    let timer_group0 = TimerGroup::new(peripherals.TIMG0, &clocks);
+    esp_hal_embassy::init(&clocks, timer_group0.timer0);
 
     // Setup the EPD display, over the SPI bus.
     let io = gpio::Io::new(peripherals.GPIO, peripherals.IO_MUX);
