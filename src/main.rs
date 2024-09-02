@@ -1,7 +1,8 @@
-#![no_std]
-#![no_main]
-#![warn(rust_2018_idioms, clippy::pedantic)]
 #![feature(type_alias_impl_trait, impl_trait_in_assoc_type, concat_bytes)]
+#![warn(rust_2018_idioms, clippy::pedantic, clippy::nursery)]
+#![allow(clippy::future_not_send)]
+#![no_main]
+#![no_std]
 
 use alloc::format;
 use core::{cell::RefCell, str::FromStr as _};
