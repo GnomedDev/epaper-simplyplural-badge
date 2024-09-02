@@ -51,7 +51,7 @@ pub async fn connect(
             wifi_iface,
             Config::dhcpv4(DhcpConfig::default()),
             resources,
-            1234
+            const_random::const_random!(u64)
         )
     );
 
