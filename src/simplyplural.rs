@@ -1,6 +1,6 @@
 use core::str::FromStr;
 
-use aformat::{aformat, CapStr};
+use aformat::{aformat, ArrayString, CapStr};
 use heapless::String;
 use reqwless::request::{Method, RequestBuilder as _};
 use serde::{de::Error as _, Deserialize as _};
@@ -11,6 +11,11 @@ type DnsSocket<'a> = embassy_net::dns::DnsSocket<'a, WifiDriver>;
 type TcpClient<'a> = embassy_net::tcp::client::TcpClient<'a, WifiDriver, 1, 8192, 8192>;
 
 pub type HttpClient<'a> = reqwless::client::HttpClient<'a, TcpClient<'a>, DnsSocket<'a>>;
+
+fn arraystring_to_heapless<const N1: usize, const N2: usize>(val: ArrayString<N1>) -> String<N2> {
+    const { assert!(N2 >= N1, "Cannot fit ArrayString into String") }
+    String::from_str(val.as_str()).unwrap()
+}
 
 fn filter_characters<'de, const N: usize, D: serde::Deserializer<'de>>(
     deserializer: D,
@@ -56,6 +61,11 @@ pub async fn fetch_current_front_name(
     let mut request = http.request(Method::GET, &url).await?.headers(&headers);
 
     let resp = request.send(rx_buffer).await?;
+    if !resp.status.is_successful() {
+        let err_msg = aformat!("SP Error: {}", resp.status.0);
+        return Ok(arraystring_to_heapless(err_msg));
+    }
+
     let body = resp.body().read_to_end().await?;
 
     let resp_json: SPResponse = serde_json::from_slice(body).unwrap();
