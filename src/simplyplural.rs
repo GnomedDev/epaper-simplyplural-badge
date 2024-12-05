@@ -5,10 +5,8 @@ use heapless::String;
 use reqwless::request::{Method, RequestBuilder as _};
 use serde::{de::Error as _, Deserialize as _};
 
-type WifiDriver = esp_wifi::wifi::WifiDevice<'static, esp_wifi::wifi::WifiStaDevice>;
-
-type DnsSocket<'a> = embassy_net::dns::DnsSocket<'a, WifiDriver>;
-type TcpClient<'a> = embassy_net::tcp::client::TcpClient<'a, WifiDriver, 1, 8192, 8192>;
+type DnsSocket<'a> = embassy_net::dns::DnsSocket<'a>;
+type TcpClient<'a> = embassy_net::tcp::client::TcpClient<'a, 1, 8192, 8192>;
 
 pub type HttpClient<'a> = reqwless::client::HttpClient<'a, TcpClient<'a>, DnsSocket<'a>>;
 

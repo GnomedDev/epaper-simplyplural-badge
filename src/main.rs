@@ -5,7 +5,7 @@
 #![no_std]
 
 use alloc::format;
-use core::{cell::RefCell, str::FromStr as _};
+use core::{cell::RefCell, mem::MaybeUninit, str::FromStr as _};
 use embassy_net::{
     dns::DnsSocket,
     tcp::client::{TcpClient, TcpClientState},
@@ -21,14 +21,13 @@ use epd_waveshare::{
 };
 use esp_backtrace as _;
 use esp_hal::{
-    clock::{ClockControl, CpuClock},
+    clock::CpuClock,
     delay::Delay,
     gpio::{self},
-    peripherals::{Peripherals, LPWR, SPI2},
+    peripherals::{LPWR, SPI2},
     prelude::*,
     rtc_cntl::Rtc,
-    spi::{FullDuplexMode, SpiMode},
-    system::SystemControl,
+    spi::SpiMode,
     timer::timg::TimerGroup,
 };
 use rusttype::Font;
@@ -49,63 +48,88 @@ macro_rules! make_static {
     }};
 }
 
+fn init_heaps() {
+    use esp_alloc::{HeapRegion, MemoryCapability, HEAP};
+
+    const HEAP_1_SIZE: usize = 70_000;
+    const HEAP_2_SIZE: usize = 98_000;
+
+    static mut HEAP_IN_SEG1: MaybeUninit<[u8; HEAP_1_SIZE]> = MaybeUninit::uninit();
+    #[link_section = ".dram2_uninit"]
+    static mut HEAP_IN_SEG2: MaybeUninit<[u8; HEAP_2_SIZE]> = MaybeUninit::uninit();
+
+    unsafe {
+        HEAP.add_region(HeapRegion::new(
+            HEAP_IN_SEG1.as_mut_ptr().cast(),
+            HEAP_1_SIZE,
+            MemoryCapability::Internal.into(),
+        ));
+
+        HEAP.add_region(HeapRegion::new(
+            HEAP_IN_SEG2.as_mut_ptr().cast(),
+            HEAP_2_SIZE,
+            MemoryCapability::Internal.into(),
+        ));
+    }
+}
+
 /// Technically doesn't shutdown the chip, but sleeps with no wakeup sources.
 fn coma(lpwr: LPWR) -> ! {
     Rtc::new(lpwr).sleep_deep(&[])
 }
 
-type Spi = esp_hal::spi::master::Spi<'static, SPI2, FullDuplexMode>;
-type SpiBus = RefCellDevice<'static, Spi, gpio::Output<'static, gpio::Gpio15>, Delay>;
-type EpdDisplay = epd_waveshare::epd2in13_v2::Epd2in13<
-    SpiBus,
-    gpio::Input<'static, gpio::Gpio25>,
-    gpio::Output<'static, gpio::Gpio27>,
-    gpio::Output<'static, gpio::Gpio26>,
+type Spi<'a> = esp_hal::spi::master::Spi<'a, esp_hal::Blocking, SPI2>;
+type SpiBus<'a> = RefCellDevice<'a, Spi<'a>, gpio::Output<'a, gpio::GpioPin<15>>, Delay>;
+type EpdDisplay<'a> = epd_waveshare::epd2in13_v2::Epd2in13<
+    SpiBus<'a>,
+    gpio::Input<'static, gpio::GpioPin<25>>,
+    gpio::Output<'static, gpio::GpioPin<27>>,
+    gpio::Output<'static, gpio::GpioPin<26>>,
     Delay,
 >;
 
 #[main]
 async fn main(spawner: Spawner) {
-    esp_alloc::heap_allocator!(50 * 1000);
+    init_heaps();
 
-    let peripherals = Peripherals::take();
-    let system = SystemControl::new(peripherals.SYSTEM);
+    let peripherals = esp_hal::init({
+        let mut config = esp_hal::Config::default();
+        config.cpu_clock = CpuClock::Clock80MHz;
+        config
+    });
 
-    let clocks = ClockControl::configure(system.clock_control, CpuClock::Clock80MHz).freeze();
-    let mut delay = Delay::new(&clocks);
+    let mut delay = Delay::new();
 
     esp_println::logger::init_logger(log::LevelFilter::Info);
 
-    let timer_group0 = TimerGroup::new(peripherals.TIMG0, &clocks);
-    esp_hal_embassy::init(&clocks, timer_group0.timer0);
+    let timer_group0 = TimerGroup::new(peripherals.TIMG0);
+    esp_hal_embassy::init(timer_group0.timer0);
 
     // Setup the EPD display, over the SPI bus.
-    let io = gpio::Io::new(peripherals.GPIO, peripherals.IO_MUX);
+    let cs = gpio::Output::new_typed(peripherals.GPIO15, gpio::Level::High);
+    let busy = gpio::Input::new_typed(peripherals.GPIO25, gpio::Pull::None);
+    let rst = gpio::Output::new_typed(peripherals.GPIO26, gpio::Level::High);
+    let dc = gpio::Output::new_typed(peripherals.GPIO27, gpio::Level::Low);
 
-    let cs = gpio::Output::new(io.pins.gpio15, gpio::Level::High);
-    let busy = gpio::Input::new(io.pins.gpio25, gpio::Pull::None);
-    let rst = gpio::Output::new(io.pins.gpio26, gpio::Level::High);
-    let dc = gpio::Output::new(io.pins.gpio27, gpio::Level::Low);
-
-    let spi = make_static!(
-        RefCell<Spi>,
-        RefCell::new(
-            Spi::new(peripherals.SPI2, 8.MHz(), SpiMode::Mode0, &clocks).with_pins(
-                Some(io.pins.gpio13), // sclk
-                Some(io.pins.gpio14), // mosi
-                gpio::NO_PIN,
-                gpio::NO_PIN,
-            ),
+    let spi = RefCell::new(
+        Spi::new_typed_with_config(
+            peripherals.SPI2,
+            esp_hal::spi::master::Config {
+                frequency: 8.MHz(),
+                mode: SpiMode::Mode0,
+                ..Default::default()
+            },
         )
+        .with_sck(peripherals.GPIO13)
+        .with_mosi(peripherals.GPIO14),
     );
 
-    let mut spi_bus = RefCellDevice::new(&*spi, cs, delay).unwrap();
-
+    let mut spi_bus = RefCellDevice::new(&spi, cs, delay).unwrap();
     let mut epd = EpdDisplay::new(&mut spi_bus, busy, dc, rst, &mut delay, None)
         .expect("EPaper should be present");
 
     let display = make_static!(EpdBuffer, EpdBuffer::default());
-    display.set_rotation(DisplayRotation::Rotate90);
+    display.set_rotation(DisplayRotation::Rotate270);
 
     let font = Font::try_from_bytes(include_bytes!("../Comfortaa-Medium-Latin.ttf")).unwrap();
     let mut display_error = |text: &str| {
@@ -119,7 +143,6 @@ async fn main(spawner: Spawner) {
     // Setup the WIFI connection.
     let wifi_stack = match wifi::connect(
         &spawner,
-        &clocks,
         peripherals.TIMG1,
         peripherals.RNG,
         peripherals.RADIO_CLK,
