@@ -2,10 +2,7 @@ use embassy_executor::Spawner;
 use embassy_net::{Config, DhcpConfig, Stack, StackResources};
 use embassy_time::{Duration, Timer};
 use esp_backtrace as _;
-use esp_hal::{
-    peripherals::{RADIO_CLK, RNG, TIMG1, WIFI},
-    rng::Rng,
-};
+use esp_hal::peripherals::{RADIO_CLK, TIMG1, WIFI};
 use esp_wifi::{
     wifi::{
         ClientConfiguration, Configuration, WifiController, WifiDevice, WifiError, WifiEvent,
@@ -14,22 +11,22 @@ use esp_wifi::{
     EspWifiController,
 };
 
-use crate::make_static;
+use crate::{make_static, Random};
 
 const SSID: &str = env!("SSID");
 const PASSWORD: &str = env!("PASSWORD");
 
 pub async fn connect(
     spawner: &Spawner,
+    rng: esp_hal::rng::Rng,
     timg1: TIMG1,
-    rng: RNG,
     radio_clk: RADIO_CLK,
     wifi: WIFI,
 ) -> Result<Stack<'static>, WifiError> {
     let timer_group1 = esp_hal::timer::timg::TimerGroup::new(timg1);
 
     log::info!("Initialising WIFI");
-    let init = esp_wifi::init(timer_group1.timer0, Rng::new(rng), radio_clk)
+    let init = esp_wifi::init(timer_group1.timer0, rng, radio_clk)
         .expect("WIFI should not fail initialization");
 
     log::info!("Creating network interface and wifi stack");
@@ -44,7 +41,7 @@ pub async fn connect(
         wifi_iface,
         Config::dhcpv4(DhcpConfig::default()),
         &mut *resources,
-        const_random::const_random!(u64),
+        u64::random(rng),
     );
 
     log::info!("Spawning background wifi tasks");

@@ -55,8 +55,8 @@ serde = { version = "1.0.204", features = ["derive"], default-features = false }
 serde_json = { version = "1.0.120", features = [
     "alloc",
 ], default-features = false }
-const-random = "0.1.18"
 serde_cow = "0.1.2"
+bytemuck = "1.22.0"
 
 [profile.release]
 codegen-units = 1

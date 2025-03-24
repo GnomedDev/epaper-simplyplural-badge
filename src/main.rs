@@ -26,7 +26,10 @@ use esp_hal::{
 };
 use rusttype::Font;
 
+use random::Random;
+
 mod draw;
+mod random;
 mod simplyplural;
 mod wifi;
 
@@ -134,10 +137,11 @@ async fn main(spawner: Spawner) {
     };
 
     // Setup the WIFI connection.
+    let rng = esp_hal::rng::Rng::new(peripherals.RNG);
     let wifi_stack = match wifi::connect(
         &spawner,
+        rng,
         peripherals.TIMG1,
-        peripherals.RNG,
         peripherals.RADIO_CLK,
         peripherals.WIFI,
     )
@@ -156,7 +160,7 @@ async fn main(spawner: Spawner) {
     let dns_socket = DnsSocket::new(wifi_stack);
 
     let config = reqwless::client::TlsConfig::new(
-        const_random::const_random!(u64),
+        u64::random(rng),
         make_static!([u8; 8192], [0; 8192]),
         make_static!([u8; 8192], [0; 8192]),
         reqwless::client::TlsVerify::None,
