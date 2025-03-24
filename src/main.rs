@@ -21,13 +21,7 @@ use epd_waveshare::{
 };
 use esp_backtrace as _;
 use esp_hal::{
-    clock::CpuClock,
-    delay::Delay,
-    gpio::{self},
-    peripherals::{LPWR, SPI2},
-    prelude::*,
-    rtc_cntl::Rtc,
-    spi::SpiMode,
+    clock::CpuClock, delay::Delay, gpio, peripherals::LPWR, rtc_cntl::Rtc, time::RateExtU32,
     timer::timg::TimerGroup,
 };
 use rusttype::Font;
@@ -60,13 +54,13 @@ fn init_heaps() {
 
     unsafe {
         HEAP.add_region(HeapRegion::new(
-            HEAP_IN_SEG1.as_mut_ptr().cast(),
+            (&raw mut HEAP_IN_SEG1).cast(),
             HEAP_1_SIZE,
             MemoryCapability::Internal.into(),
         ));
 
         HEAP.add_region(HeapRegion::new(
-            HEAP_IN_SEG2.as_mut_ptr().cast(),
+            (&raw mut HEAP_IN_SEG2).cast(),
             HEAP_2_SIZE,
             MemoryCapability::Internal.into(),
         ));
@@ -78,23 +72,23 @@ fn coma(lpwr: LPWR) -> ! {
     Rtc::new(lpwr).sleep_deep(&[])
 }
 
-type Spi<'a> = esp_hal::spi::master::Spi<'a, esp_hal::Blocking, SPI2>;
-type SpiBus<'a> = RefCellDevice<'a, Spi<'a>, gpio::Output<'a, gpio::GpioPin<15>>, Delay>;
+type Spi<'a> = esp_hal::spi::master::Spi<'a, esp_hal::Blocking>;
+type SpiBus<'a> = RefCellDevice<'a, Spi<'a>, gpio::Output<'a>, Delay>;
 type EpdDisplay<'a> = epd_waveshare::epd2in13_v2::Epd2in13<
     SpiBus<'a>,
-    gpio::Input<'static, gpio::GpioPin<25>>,
-    gpio::Output<'static, gpio::GpioPin<27>>,
-    gpio::Output<'static, gpio::GpioPin<26>>,
+    gpio::Input<'static>,
+    gpio::Output<'static>,
+    gpio::Output<'static>,
     Delay,
 >;
 
-#[main]
+#[esp_hal_embassy::main]
 async fn main(spawner: Spawner) {
     init_heaps();
 
     let peripherals = esp_hal::init({
         let mut config = esp_hal::Config::default();
-        config.cpu_clock = CpuClock::Clock80MHz;
+        config.cpu_clock = CpuClock::_80MHz;
         config
     });
 
@@ -106,20 +100,19 @@ async fn main(spawner: Spawner) {
     esp_hal_embassy::init(timer_group0.timer0);
 
     // Setup the EPD display, over the SPI bus.
-    let cs = gpio::Output::new_typed(peripherals.GPIO15, gpio::Level::High);
-    let busy = gpio::Input::new_typed(peripherals.GPIO25, gpio::Pull::None);
-    let rst = gpio::Output::new_typed(peripherals.GPIO26, gpio::Level::High);
-    let dc = gpio::Output::new_typed(peripherals.GPIO27, gpio::Level::Low);
+    let cs = gpio::Output::new(peripherals.GPIO15, gpio::Level::High);
+    let busy = gpio::Input::new(peripherals.GPIO25, gpio::Pull::None);
+    let rst = gpio::Output::new(peripherals.GPIO26, gpio::Level::High);
+    let dc = gpio::Output::new(peripherals.GPIO27, gpio::Level::Low);
 
     let spi = RefCell::new(
-        Spi::new_typed_with_config(
+        Spi::new(
             peripherals.SPI2,
-            esp_hal::spi::master::Config {
-                frequency: 8.MHz(),
-                mode: SpiMode::Mode0,
-                ..Default::default()
-            },
+            esp_hal::spi::master::Config::default()
+                .with_mode(esp_hal::spi::Mode::_0)
+                .with_frequency(8.MHz()),
         )
+        .expect("target hardware should be compatible")
         .with_sck(peripherals.GPIO13)
         .with_mosi(peripherals.GPIO14),
     );

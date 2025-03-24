@@ -6,28 +6,28 @@ edition = "2021"
 license = "MIT"
 
 [dependencies]
-xtensa-lx-rt = { version = "0.17.0", features = ["float-save-restore"] }
-esp-backtrace = { version = "0.14.0", features = [
+xtensa-lx-rt = { version = "0.18.0", features = ["float-save-restore"] }
+esp-backtrace = { version = "0.15.1", features = [
     "esp32",
     "exception-handler",
     "panic-handler",
     "println",
 ] }
-esp-wifi = { version = "0.11", features = [
+esp-wifi = { version = "0.12", features = [
     "esp-alloc",
     "esp32",
     "wifi",
     "log",
 ], default-features = false }
-esp-hal = { version = "0.22.0", features = ["esp32"] }
-esp-println = { version = "0.12.0", features = ["esp32", "log"] }
-esp-alloc = { version = "0.5.0" }
-esp-hal-embassy = { version = "0.5.0", default-features = false, features = [
+esp-hal = { version = "0.23.0", features = ["esp32"] }
+esp-println = { version = "0.13.0", features = ["esp32", "log"] }
+esp-alloc = { version = "0.6.0" }
+esp-hal-embassy = { version = "0.6.0", default-features = false, features = [
     "esp32",
     "executors",
 ] }
 
-embedded-hal-bus = "0.2.0"
+embedded-hal-bus = "0.3.0"
 epd-waveshare = { git = "https://github.com/caemor/epd-waveshare.git", default-features = false, features = [
     "epd2in13_v2",
     "graphics",
@@ -37,18 +37,17 @@ embedded-graphics = { version = "0.8.1", default-features = false }
 embedded_font = { git = "https://github.com/GnomedDev/embedded-font" }
 rusttype = { version = "0.9.3", default-features = false }
 heapless = { version = "0.8.0", default-features = false, features = ["serde"] }
-embassy-executor = { version = "0.6.0", features = [
-    "integrated-timers",
+embassy-executor = { version = "0.7.0", features = [
     "nightly",
 ], default-features = false }
-embassy-net = { version = "0.5.0", default-features = false, features = [
+embassy-net = { version = "0.6.0", default-features = false, features = [
     "dhcpv4",
     "dns",
     "tcp",
     "log",
     "proto-ipv4",
 ] }
-embassy-time = { version = "0.3.1", default-features = false }
+embassy-time = { version = "0.4.0", default-features = false }
 static_cell = "2.1.0"
 reqwless = "0.13"
 aformat = "0.1.3"
